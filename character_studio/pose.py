@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 
 from .solver import (Solver, Alvo, Direcao, Palma, Olhar, Dobra, Tronco, Toque, ApoioChao, ApoioAssento,
-                     Fixar, unit, DEG)
+                     Fixar, SemEquilibrio, unit, DEG)
 
 EIXOS = {"frente": (0, -1, 0), "tras": (0, 1, 0), "cima": (0, 0, 1), "baixo": (0, 0, -1),
          "esquerda": (1, 0, 0), "direita": (-1, 0, 0)}
@@ -86,6 +86,10 @@ class Pose:
         self._no_ar = True
         self.cons.append(Alvo("quadril", (0, 0, altura_quadril * self.H), eixos="z"))
         return self
+
+    def em_movimento(self):
+        """Pose de movimento (corrida, chute armado): não exige equilíbrio estático."""
+        self.cons.append(SemEquilibrio()); return self
 
     # ------------------------------------------------------------ corpo
     def tronco(self, frente=0.0, lado=0.0, giro=0.0, peso=8.0):

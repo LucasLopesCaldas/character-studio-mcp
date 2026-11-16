@@ -157,6 +157,12 @@ class Fixar:
 
 
 @dataclass
+class SemEquilibrio:
+    """Pose em movimento: não exige o centro de massa sobre o apoio (corrida, chute armado, queda)."""
+    peso: float = 0.0
+
+
+@dataclass
 class Relatorio:
     erros: dict = field(default_factory=dict)
     avisos: list = field(default_factory=list)
@@ -374,6 +380,8 @@ class Solver:
                 up = st.D[q] @ np.array([0, 0, 1.0])       # quadril aprumado e de frente (mole)
                 e += [up[0] * 0.25, up[1] * 0.25, (st.D[q] @ np.array([1.0, 0, 0]))[1] * 0.25]
                 e = np.array(e)
+            elif isinstance(c, SemEquilibrio):
+                continue
             elif isinstance(c, Fixar):
                 i = self.idx[c.osso]
                 e = st.local[i] - np.array(c.rotacao, float) * DEG
@@ -386,7 +394,7 @@ class Solver:
 
     def _balance(self, st, cons):
         feet = [c for c in cons if isinstance(c, ApoioChao)]
-        if not feet or any(isinstance(c, ApoioAssento) for c in cons):
+        if not feet or any(isinstance(c, (ApoioAssento, SemEquilibrio)) for c in cons):
             return np.zeros(0)
         pts = []
         for c in feet:
