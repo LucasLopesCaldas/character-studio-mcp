@@ -94,3 +94,16 @@ def humanoid(p: Proportions | None = None) -> Skeleton:
         sk.add(f"canela.{side}", f"coxa.{side}", (s * hx, 0, knee_z), (s * hx, 0, ankle_z), "canela", side)
         sk.add(f"pe.{side}", f"canela.{side}", (s * hx, 0, ankle_z), (s * hx, -p.foot * H, 0.012 * H), "pe", side)
     return sk
+
+
+CORPOS = {
+    "padrao": Proportions(),
+    # cabeçudo, pernas curtas, braços longos
+    "baixinho": Proportions(height=1.15, head=0.30, hip_height=0.40, thigh=0.165, upper_arm=0.17, forearm=0.16,
+                            shoulder_width=0.11, hip_width=0.07),
+}
+
+
+def corpo(nome: str = "padrao") -> Skeleton:
+    """Esqueleto de um corpo pré-definido: 'padrao' ou 'baixinho'."""
+    return humanoid(CORPOS[nome])
