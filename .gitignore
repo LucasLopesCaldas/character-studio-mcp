@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+out/
+*.glb
+*.blend
+*.blend1
+*.mp4
+*.png
+*.jpg
+*.webm
