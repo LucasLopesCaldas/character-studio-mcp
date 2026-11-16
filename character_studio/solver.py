@@ -50,8 +50,8 @@ JOINTS = {
     "clavicula": dict(tipo="bola", conforto=(0, 0, 0), peso=3.0, caixa=((-3, 3), (-18, 10), (-15, 15))),
     "braco":     dict(tipo="bola", conforto=(0, 74, 0), peso=0.30, cone=((0.45, -0.45, -0.77), 120), torcao=(-85, 85)),
     "antebraco": dict(tipo="dobradica", eixo=(0, 0, -1), faixa=(3, 148), conforto=18, peso=0.25),
-    "mao":       dict(tipo="bola", conforto=(0, 0, 0), peso=0.2, caixa=((-80, 80), (-55, 55), (-25, 25))),
-    "coxa":      dict(tipo="bola", conforto=(0, 0, 0), peso=0.18, cone=((0, -0.5, -0.87), 105), torcao=(-35, 35)),
+    "mao":       dict(tipo="bola", conforto=(0, 0, 0), peso=0.2, caixa=((-95, 95), (-55, 55), (-25, 25))),
+    "coxa":      dict(tipo="bola", conforto=(0, 0, 0), peso=0.18, pesos=(1, 4, 4), cone=((0, -0.5, -0.87), 105), torcao=(-35, 35)),
     "canela":    dict(tipo="dobradica", eixo=(1, 0, 0), faixa=(2, 150), conforto=4, peso=0.25),
     "pe":        dict(tipo="bola", conforto=(0, 0, 0), peso=0.6, caixa=((-40, 35), (-15, 15), (-20, 20))),
 }
@@ -72,6 +72,7 @@ class Alvo:
     ponto: tuple
     peso: float = 30.0
     eixos: str = "xyz"
+    ref: str | None = None      # se dado, `ponto` é um deslocamento a partir desse osso, no referencial dele
 
 
 @dataclass
@@ -122,7 +123,7 @@ class Dobra:
 
 @dataclass
 class Tronco:
-    """Inclinação do tronco em graus: frente (+), lado esquerdo (+), giro à esquerda (+)."""
+    """Inclinação do peito em graus, em relação à vertical: frente (+), lado esquerdo (+), giro à esquerda (+)."""
     frente: float = 0.0
     lado: float = 0.0
     giro: float = 0.0
@@ -205,9 +206,9 @@ class Solver:
         self.nvar = k
         self.hinge = np.array([s["tipo"] == "dobradica" for s in self.spec])
         self.axis = np.array([np.array(s.get("eixo", (0, 0, 0)), float) * self.sign[i] for i, s in enumerate(self.spec)])
-        self.comfort = np.zeros((n, 3)); self.cw = np.zeros(n)
+        self.comfort = np.zeros((n, 3)); self.cw = np.zeros((n, 3))
         for i, s in enumerate(self.spec):
-            self.cw[i] = s["peso"]
+            self.cw[i] = s["peso"] * np.array(s.get("pesos", (1, 1, 1)), float)   # pesos: flexão barata, abrir/torcer caro
             self.comfort[i] = (self.axis[i] * s["conforto"] if self.hinge[i] else np.array(s["conforto"], float) * self.sign[i]) * DEG
         self.radius = np.array([RADIUS[b.role] for b in B]) * self.H
         self.mass = np.array([MASS[b.role] for b in B])
@@ -283,11 +284,14 @@ class Solver:
 
     # -------------------------------------------------------------- pontos do corpo
     def point(self, st: PoseState, parte: str):
-        i = self.idx[parte]
-        role = self.sk.bones[parte].role
-        if role == "mao" or role == "cabeca":
-            return (st.head[i] + st.tail[i]) / 2
-        return st.head[i]
+        """Ponto de uma parte. 'osso' = ponto padrão; 'osso:inicio', 'osso:meio', 'osso:ponta' escolhem onde."""
+        nome, _, onde = parte.partition(":")
+        i = self.idx[nome]
+        role = self.sk.bones[nome].role
+        if not onde:
+            onde = "meio" if role in ("mao", "cabeca") else "inicio"
+        t = {"inicio": 0.0, "meio": 0.5, "ponta": 1.0}[onde]
+        return st.head[i] + (st.tail[i] - st.head[i]) * t
 
     def com(self, st: PoseState):
         c = (st.head + st.tail) / 2
@@ -320,7 +324,10 @@ class Solver:
         res = []
         for c in cons:
             if isinstance(c, Alvo):
-                e = self.point(st, c.parte) - np.asarray(c.ponto, float)
+                alvo = np.asarray(c.ponto, float)
+                if c.ref is not None:
+                    alvo = self.point(st, c.ref) + st.D[self.idx[c.ref.split(":")[0]]] @ alvo
+                e = self.point(st, c.parte) - alvo
                 e = e[["xyz".index(a) for a in c.eixos]]
             elif isinstance(c, Direcao):
                 i = self.idx[c.osso]
@@ -345,8 +352,8 @@ class Solver:
                 ang = np.linalg.norm(st.local[i]) / DEG
                 e = np.array([(ang - (lo + (hi - lo) * c.quanto)) * DEG])
             elif isinstance(c, Tronco):
-                i = self.idx["peito"]; q = self.idx["quadril"]
-                rel = st.D[q].T @ st.D[i]
+                i = self.idx["peito"]
+                rel = st.D[i]          # absoluto: em relação à vertical e à frente da personagem
                 alvo = rodrigues(np.array([0, 0, c.giro * DEG]))[0] @ rodrigues(np.array([c.frente * DEG, c.lado * DEG, 0]))[0]
                 e = (rel - alvo).ravel() * 0.6
             elif isinstance(c, ApoioChao):
@@ -393,7 +400,7 @@ class Solver:
 
     def residuals(self, x, cons):
         st = self.fk(x)
-        comfort = ((st.local - self.comfort) * self.cw[:, None] * 0.12).ravel()
+        comfort = ((st.local - self.comfort) * self.cw * 0.12).ravel()
         return np.concatenate([
             self._constraint_residuals(st, cons),
             self._limits(st) * 20.0,
@@ -432,6 +439,8 @@ class Solver:
         self._constraint_residuals(st, cons, parts)
         for c, e in parts:
             nome = type(c).__name__ + "(" + str(getattr(c, "parte", getattr(c, "osso", getattr(c, "pe", getattr(c, "mao", ""))))) + ")"
+            if isinstance(c, Tronco):
+                e = e / 0.6
             if isinstance(c, (Alvo, Toque, ApoioChao, ApoioAssento)):
                 err = float(np.abs(e).max())
                 rep.erros[nome] = f"{err * 100:.1f} cm"
