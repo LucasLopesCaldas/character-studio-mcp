@@ -19,6 +19,7 @@ from character_studio.solver import (Solver, Alvo, Toque, ApoioChao, ApoioAssent
                                      Tronco, SemEquilibrio, rodrigues, DEG)
 from character_studio.pose import Pose
 from character_studio import poses as receitas
+from character_studio.manual import manual as _manual
 
 out = Path(sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else "out"); out.mkdir(parents=True, exist_ok=True)
 # --outro-corpo: repete a medição num personagem de proporções bem diferentes (cabeçudo, pernas curtas, braços longos),
@@ -35,24 +36,7 @@ r = 0.068 * H
 
 # ------------------------------------------------------------------ "sem solucionador": ângulos à mão
 def manual(pos_quadril, ossos):
-    """ossos = {nome: ângulo (dobradiça) ou [(eixo, graus), ...] aplicados em ordem, no referencial do pai}.
-    Para o lado direito os ângulos são escritos como se fosse o esquerdo (espelhados aqui)."""
-    x = S.x0() * 0
-    x[:3] = pos_quadril
-    n = 0
-    for nome in S.names:
-        i = S.idx[nome]; v = ossos.get(nome, 0 if S.hinge[i] else [])
-        if S.hinge[i]:
-            x[S.slices[i]] = v * DEG; n += 1
-        else:
-            R = Rot.identity()
-            for eixo, g in v:
-                if nome.endswith(".R") and eixo in "yz":
-                    g = -g
-                R = Rot.from_euler(eixo, g, degrees=True) * R
-                n += 1
-            x[S.slices[i]] = R.as_rotvec()
-    return x, n + 3
+    return _manual(S, pos_quadril, ossos)
 
 
 # ------------------------------------------------------------------ réguas
