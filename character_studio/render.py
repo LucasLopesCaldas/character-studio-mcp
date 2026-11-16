@@ -154,3 +154,15 @@ def add_skeleton_visual(sk: Skeleton, width=0.022):
             v, f = _sphere(b.tail, width * 0.4)
             objs.append(add_mesh(f"ponta_{b.name}", v, f, joint, smooth=True))
     return objs
+
+
+def add_box(name, center, size, hexcolor="#8a8f98"):
+    cx, cy, cz = center; sx, sy, sz = (d / 2 for d in size)
+    v = [(cx + a * sx, cy + b * sy, cz + c * sz) for a in (-1, 1) for b in (-1, 1) for c in (-1, 1)]
+    f = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
+    return add_mesh(name, v, f, material(name, hexcolor, 0.7))
+
+
+def add_marker(point, radius=0.022, hexcolor="#d7263d"):
+    v, f = _sphere(point, radius)
+    return add_mesh("alvo", v, f, material("alvo", hexcolor, 0.4), smooth=True)
